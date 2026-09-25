@@ -1,0 +1,105 @@
+name: ${COMPOSE_PROJECT_NAME:-wordpress_project}
+
+services:
+  # ── Servicio Principal de WordPress ─────────────────────────────────────
+  wordpress:
+    build:
+      context: ./docker
+      args:
+        WP_IMAGE: ${WP_IMAGE:-wordpress:6.7-php8.2-apache}
+    image: ${COMPOSE_PROJECT_NAME:-wordpress_project}-app:latest
+    container_name: ${CONTAINER_PREFIX:-wp}-app
+    ports:
+      - "127.0.0.1:${APP_PORT:-8080}:80"
+    environment:
+      TZ: ${APP_TIMEZONE:-America/Caracas}
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+      WORDPRESS_DB_HOST: db
+      WORDPRESS_DB_NAME: ${DB_NAME:-wordpress_db}
+      WORDPRESS_DB_USER: ${DB_USER:-wordpress_user}
+      WORDPRESS_DB_PASSWORD: ${DB_PASSWORD}
+      WORDPRESS_TABLE_PREFIX: ${WORDPRESS_TABLE_PREFIX:-wp_}
+      WORDPRESS_AUTH_KEY: ${WORDPRESS_AUTH_KEY}
+      WORDPRESS_SECURE_AUTH_KEY: ${WORDPRESS_SECURE_AUTH_KEY}
+      WORDPRESS_LOGGED_IN_KEY: ${WORDPRESS_LOGGED_IN_KEY}
+      WORDPRESS_NONCE_KEY: ${WORDPRESS_NONCE_KEY}
+      WORDPRESS_AUTH_SALT: ${WORDPRESS_AUTH_SALT}
+      WORDPRESS_SECURE_AUTH_SALT: ${WORDPRESS_SECURE_AUTH_SALT}
+      WORDPRESS_LOGGED_IN_SALT: ${WORDPRESS_LOGGED_IN_SALT}
+      WORDPRESS_NONCE_SALT: ${WORDPRESS_NONCE_SALT}
+      # Configuración de seguridad inyectada en wp-config.php con escape de variables ($$)
+      WORDPRESS_CONFIG_EXTRA: |
+        define('FS_METHOD', 'direct');
+        define('DISALLOW_FILE_EDIT', true);
+        # Descomentar al activar reverse proxy con SSL:
+        # if (isset($$_SERVER['HTTP_X_FORWARDED_PROTO']) && $$_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') {
+        #     $$_SERVER['HTTPS'] = 'on';
+        # }
+        # define('FORCE_SSL_ADMIN', true);
+    volumes:
+      # El Core se gestiona de forma aislada en un volumen dedicado (protegido como Read-Only)
+      - wp_core:/var/www/html
+      # Contenido del sitio (temas, plugins, uploads) accesible directamente en tu host
+      - ./web/wp-content:/var/www/html/wp-content
+      # Configuración PHP personalizada (aplicar cambios con 'docker compose restart wordpress')
+      - ./docker/php-override.ini:/usr/local/etc/php/conf.d/z-override.ini:ro
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: always
+
+  # ── Servicio Auxiliar Efímero: Actualización de Schema BD ────────────────
+  db-updater:
+    image: ${COMPOSE_PROJECT_NAME:-wordpress_project}-app:latest
+    container_name: ${CONTAINER_PREFIX:-wp}-db-updater
+    volumes:
+      - wp_core:/var/www/html
+      - ./web/wp-content:/var/www/html/wp-content
+    command: >
+      bash -c "
+        echo '[db-updater] Esperando a que wp-config.php esté listo...';
+        until [ -f /var/www/html/wp-config.php ]; do sleep 2; done;
+        echo '[db-updater] Verificando instalación de WordPress en la BD...';
+        if wp core is-installed --allow-root --path=/var/www/html 2>/dev/null; then
+          echo '[db-updater] WordPress detectado. Ejecutando actualización de schema si es necesaria...';
+          wp core update-db --allow-root --path=/var/www/html;
+          echo '[db-updater] Schema verificado exitosamente.';
+        else
+          echo '[db-updater] Instalación nueva en curso. No hay schema previo que actualizar. OK.';
+        fi
+      "
+    depends_on:
+      db:
+        condition: service_healthy
+      wordpress:
+        condition: service_started
+    restart: "no"
+
+  # ── Base de Datos MariaDB ───────────────────────────────────────────────
+  db:
+    image: ${DB_IMAGE:-mariadb:11.4}
+    container_name: ${CONTAINER_PREFIX:-wp}-db
+    environment:
+      TZ: ${APP_TIMEZONE:-America/Caracas}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME:-wordpress_db}
+      MYSQL_USER: ${DB_USER:-wordpress_user}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    env_file:
+      - .env
+    restart: always
+
+volumes:
+  wp_core:
+  db_data:

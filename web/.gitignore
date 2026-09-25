@@ -1,0 +1,7 @@
+# Ignorar archivos generados dinámicamente en uploads y upgrade
+wp-content/uploads/*
+!wp-content/uploads/.gitkeep
+wp-content/upgrade/*
+!wp-content/upgrade/.gitkeep
+wp-content/cache/*
+!wp-content/cache/.gitkeep
