@@ -11,9 +11,16 @@ echo "════════════════════════�
 echo "  Inicializador de Variables y Secretos para WordPress Docker"
 echo "══════════════════════════════════════════════════════════════"
 
+USER_UID=$(id -u)
+USER_GID=$(id -g)
+
 if [ -f "$ENV_FILE" ] && [ "$1" != "--force" ]; then
     echo "⚠️  El archivo .env ya existe en la raíz del proyecto."
-    echo "   Para regenerarlo de cero, ejecuta: $0 --force"
+    echo "==> Actualizando PUID ($USER_UID) y PGID ($USER_GID) con los valores del sistema actual..."
+    sed -i "s/^PUID=.*/PUID=$USER_UID/" "$ENV_FILE"
+    sed -i "s/^PGID=.*/PGID=$USER_GID/" "$ENV_FILE"
+    echo "==> PUID y PGID actualizados correctamente."
+    echo "   Para regenerar el .env completo (nuevas contraseñas y salts), ejecuta: $0 --force"
     exit 0
 fi
 
@@ -21,9 +28,6 @@ if [ ! -f "$ENV_EXAMPLE" ]; then
     echo "❌ Error: No se encontró el archivo $ENV_EXAMPLE"
     exit 1
 fi
-
-USER_UID=$(id -u)
-USER_GID=$(id -g)
 
 python3 - <<EOF
 import os
