@@ -55,6 +55,10 @@ services:
   db-updater:
     image: ${COMPOSE_PROJECT_NAME:-wordpress_project}-app:latest
     container_name: ${CONTAINER_PREFIX:-wp}-db-updater
+    environment:
+      TZ: ${APP_TIMEZONE:-America/Caracas}
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
     volumes:
       - wp_core:/var/www/html
       - ./web/wp-content:/var/www/html/wp-content
