@@ -99,6 +99,17 @@ find /var/www/html -maxdepth 1 -not -name "wp-content" -exec chown root:root {} 
 if [ -d "/var/www/html/wp-admin" ]; then chown -R root:root /var/www/html/wp-admin; fi
 if [ -d "/var/www/html/wp-includes" ]; then chown -R root:root /var/www/html/wp-includes; fi
 
+# ── 4b. Archivos en raíz escribibles por plugins específicos ──────────────
+# llms.txt: generado y mantenido por Yoast SEO (feature "LLMs.txt")
+# Se crea vacío si no existe; touch preserva el contenido si ya existe.
+LLMS_FILE="/var/www/html/llms.txt"
+if [ ! -f "$LLMS_FILE" ]; then
+    touch "$LLMS_FILE"
+    echo "==> [Entrypoint] llms.txt creado para Yoast SEO."
+fi
+chown www-data:www-data "$LLMS_FILE"
+chmod 664 "$LLMS_FILE"
+
 # ── 5. Permisos sobre wp-content (Lectura y Escritura para www-data) ───────
 echo "==> [Entrypoint] Ajustando permisos de wp-content para www-data (UID: $TARGET_UID)..."
 chown -R www-data:www-data /var/www/html/wp-content
