@@ -93,22 +93,24 @@ if [ "$THEMES_COUNT" -eq 0 ]; then
 fi
 
 # ── 4. Blindaje del Core (Inmutable ante exploits web) ─────────────────────
-# El core pertenece a root:root. PHP (que corre como www-data) NO puede modificarlo.
+# Los archivos del core pertenecen a root:root — PHP (www-data) NO puede modificarlos.
+# El directorio raíz /var/www/html se deja como root:www-data 775 para que plugins
+# como Yoast SEO puedan crear archivos nuevos (ej. llms.txt) sin tocar el core.
 echo "==> [Entrypoint] Aplicando protección de solo lectura al Core de WordPress..."
-find /var/www/html -maxdepth 1 -not -name "wp-content" -exec chown root:root {} +
-if [ -d "/var/www/html/wp-admin" ]; then chown -R root:root /var/www/html/wp-admin; fi
+find /var/www/html -mindepth 1 -maxdepth 1 -not -name "wp-content" -exec chown root:root {} +
+chown root:www-data /var/www/html
+chmod 775 /var/www/html
+if [ -d "/var/www/html/wp-admin" ];    then chown -R root:root /var/www/html/wp-admin;    fi
 if [ -d "/var/www/html/wp-includes" ]; then chown -R root:root /var/www/html/wp-includes; fi
 
-# ── 4b. Archivos en raíz escribibles por plugins específicos ──────────────
-# llms.txt: generado y mantenido por Yoast SEO (feature "LLMs.txt")
-# Se crea vacío si no existe; touch preserva el contenido si ya existe.
+# ── 4b. Archivos en raíz preexistentes escritos por plugins ───────────────
+# Si llms.txt ya existe (creado por Yoast), asegurar que www-data pueda escribirlo.
+# NO se crea vacío; Yoast lo genera en su primer ciclo y lo gestiona él solo.
 LLMS_FILE="/var/www/html/llms.txt"
-if [ ! -f "$LLMS_FILE" ]; then
-    touch "$LLMS_FILE"
-    echo "==> [Entrypoint] llms.txt creado para Yoast SEO."
+if [ -f "$LLMS_FILE" ]; then
+    chown www-data:www-data "$LLMS_FILE"
+    chmod 664 "$LLMS_FILE"
 fi
-chown www-data:www-data "$LLMS_FILE"
-chmod 664 "$LLMS_FILE"
 
 # ── 5. Permisos sobre wp-content (Lectura y Escritura para www-data) ───────
 echo "==> [Entrypoint] Ajustando permisos de wp-content para www-data (UID: $TARGET_UID)..."
